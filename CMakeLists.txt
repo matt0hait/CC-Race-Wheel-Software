@@ -28,7 +28,7 @@ add_compile_options(-Wall
         -Wno-unused-function # we have some for the docs that aren't called
         -Wno-maybe-uninitialized
         )
-include_directories(include/utils/tusb_config/ PUBLIC)
+include_directories(include/tusb_config/ PUBLIC)
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 target_link_libraries(${PROJECT_NAME} pico_stdlib tinyusb_device tinyusb_board)
 pico_add_extra_outputs(${PROJECT_NAME})
