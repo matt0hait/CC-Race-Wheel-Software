@@ -1,3 +1,5 @@
+#include <sys/select.h>
+#include <sys/cdefs.h>
 // FreeRTOS
 #include <FreeRTOS.h>
 #include <task.h>
@@ -16,7 +18,8 @@
 #define         RED_LED_PIN           20
 
 void led_task_pico(void* unused_arg);
-void led_task_gpio(void* unused_arg);
+
+_Noreturn void led_task_gpio(void* unused_arg);
 void log_debug(const char* msg);
 void log_device_info(void);
 
@@ -28,7 +31,7 @@ void log_device_info(void);
 volatile QueueHandle_t queue = NULL;
 
 // Set a delay time of exactly 500ms
-const TickType_t ms_delay = 500 / portTICK_PERIOD_MS;
+const TickType_t ms_delay = 250 / portTICK_PERIOD_MS;
 
 // FROM 1.0.1 Record references to the tasks
 TaskHandle_t gpio_task_handle = NULL;
@@ -73,7 +76,7 @@ void led_task_pico(void* unused_arg) {
  * @brief Repeatedly flash an LED connected to GPIO pin 20
  *        based on the value passed via the inter-task queue.
  */
-void led_task_gpio(void* unused_arg) {
+_Noreturn void led_task_gpio(void* unused_arg) {
     // This variable will take a copy of the value
     // added to the FreeRTOS xQueue
     uint8_t passed_value_buffer = 0;
