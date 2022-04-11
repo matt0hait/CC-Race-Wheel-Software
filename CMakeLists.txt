@@ -20,6 +20,11 @@ if (PICO_SDK_VERSION_STRING VERSION_LESS "1.3.0")
     message(FATAL_ERROR "Raspberry Pi Pico SDK version 1.3.0 (or later) required. Your version is ${PICO_SDK_VERSION_STRING}")
 endif()
 
+
+add_compile_definitions(APP_NAME="${APP_1_NAME}")
+add_compile_definitions(APP_VERSION="${APP_1_VERSION_NUMBER}")
+add_compile_definitions(BUILD_NUM=${BUILD_NUMBER})
+
 # Initialize the SDK
 pico_sdk_init()
 
@@ -30,5 +35,5 @@ add_compile_options(-Wall
         )
 include_directories(include/utils/tusb_config/ PUBLIC)
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
-target_link_libraries(${PROJECT_NAME} pico_stdlib tinyusb_device tinyusb_board)
+target_link_libraries(${PROJECT_NAME} pico_stdlib FreeRTOS tinyusb_device tinyusb_board)
 pico_add_extra_outputs(${PROJECT_NAME})

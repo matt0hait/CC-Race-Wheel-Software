@@ -38,6 +38,7 @@ By Matthew Hait
   - CDC ACM port
 ###Tasking
 - FreeRTOS
+  - https://github.com/smittytone/RP2040-FreeRTOS
 
 ----------------------
 ### Commands I forget
