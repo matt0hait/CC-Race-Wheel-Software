@@ -1,9 +1,15 @@
 #include <sys/select.h>
 #include <sys/cdefs.h>
+#include <sys/select.h>
+#include <sys/cdefs.h>
+#include <sys/select.h>
+#include <sys/cdefs.h>
 // FreeRTOS
 #include <FreeRTOS.h>
 #include <task.h>
 #include <queue.h>
+#include "semphr.h"
+#include "timers.h"
 // C
 #include <stdbool.h>
 #include <stdlib.h>
@@ -13,153 +19,239 @@
 // Pico SDK
 #include "pico/stdlib.h"            // Includes `hardware_gpio.h`
 #include "pico/binary_info.h"
-
-
-#define         RED_LED_PIN           20
+// TinyUSB
+#include "bsp/board.h"
+#include "tusb.h"
+#include "usb_descriptors.h"
 
 void led_task_pico(void* unused_arg);
 
-_Noreturn void led_task_gpio(void* unused_arg);
-void log_debug(const char* msg);
-void log_device_info(void);
+// @brief Blink pattern
+enum  {
+    BLINK_NOT_MOUNTED = 250,    // @brief 250   ms: device not mounted
+    BLINK_MOUNTED = 1000,       // @brief 1000  ms: device mounted
+    BLINK_SUSPENDED = 2500,     // @brief 2500  ms: device is suspended
+};
 
+StaticTimer_t blinky_tmdef; // @brief Static Timer
+TimerHandle_t blinky_tm;
 
-/*
- * GLOBALS
- */
-// This is the inter-task queue
-volatile QueueHandle_t queue = NULL;
+// @brief Static task for USBD
+#if CFG_TUSB_DEBUG
+    #define USBD_STACK_SIZE     (3*configMINIMAL_STACK_SIZE)
+#else
+    #define USBD_STACK_SIZE     (3*configMINIMAL_STACK_SIZE/2)
+#endif
 
-// Set a delay time of exactly 500ms
-const TickType_t ms_delay = 250 / portTICK_PERIOD_MS;
+StackType_t  usb_device_stack[USBD_STACK_SIZE];
+StaticTask_t usb_device_taskdef;
 
-// FROM 1.0.1 Record references to the tasks
-TaskHandle_t gpio_task_handle = NULL;
-TaskHandle_t pico_task_handle = NULL;
+// @brief Static task for hid
+#define HID_STACK_SIZE      configMINIMAL_STACK_SIZE
+StackType_t  hid_stack[HID_STACK_SIZE];
+StaticTask_t hid_taskdef;
 
+void led_blinky_cb(TimerHandle_t xTimer);
+_Noreturn void usb_device_task(void* param);
+_Noreturn void hid_task(void* params);
 
-/*
- * FUNCTIONS
- */
+int main(void) {
+    board_init();
+    //blinky_tm = xTimerCreateStatic(NULL, pdMS_TO_TICKS(BLINK_NOT_MOUNTED), true, NULL, led_blinky_cb, &blinky_tmdef);
+    blinky_tm = xTimerCreate(NULL, pdMS_TO_TICKS(BLINK_NOT_MOUNTED), true, NULL, led_blinky_cb); // soft timer for blinky
+    xTimerStart(blinky_tm, 0);
+    (void) xTaskCreate( usb_device_task, "usbd", USBD_STACK_SIZE, NULL, configMAX_PRIORITIES-1, NULL);  // Create a task for tinyusb device stack
+    (void) xTaskCreate(hid_task, "hid", HID_STACK_SIZE, NULL, configMAX_PRIORITIES - 2, NULL);  // Create HID task
+    // skip starting scheduler (and return) for ESP32-S2 or ESP32-S3
+    #if !( TU_CHECK_MCU(ESP32S2) || TU_CHECK_MCU(ESP32S3) )
+        vTaskStartScheduler();
+    #endif
+    return 0;
+}
 
-/**
- * @brief Repeatedly flash the Pico's built-in LED.
- */
-void led_task_pico(void* unused_arg) {
-    // Store the Pico LED state
-    uint8_t pico_led_state = 0;
-
-    // Configure the Pico's on-board LED
-    gpio_init(PICO_DEFAULT_LED_PIN);
-    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
-
-    while (true) {
-        // Turn Pico LED on an add the LED state
-        // to the FreeRTOS xQUEUE
-        log_debug("PICO LED FLASH");
-        pico_led_state = 1;
-        gpio_put(PICO_DEFAULT_LED_PIN, pico_led_state);
-        xQueueSendToBack(queue, &pico_led_state, 0);
-        vTaskDelay(ms_delay);
-
-        // Turn Pico LED off an add the LED state
-        // to the FreeRTOS xQUEUE
-        pico_led_state = 0;
-        gpio_put(PICO_DEFAULT_LED_PIN, pico_led_state);
-        xQueueSendToBack(queue, &pico_led_state, 0);
-        vTaskDelay(ms_delay);
+// USB Device Driver task
+// This top level thread process all usb events and invoke callbacks
+_Noreturn void usb_device_task(void* param) {
+    (void) param;
+    // This should be called after scheduler/kernel is started.
+    // Otherwise, it could cause kernel issue since USB IRQ handler does use RTOS queue API.
+    tusb_init();
+    // RTOS forever loop
+    while (1) {
+        // tinyusb device task
+        tud_task();
     }
 }
 
+//--------------------------------------------------------------------+
+// Device callbacks
+//--------------------------------------------------------------------+
 
-/**
- * @brief Repeatedly flash an LED connected to GPIO pin 20
- *        based on the value passed via the inter-task queue.
- */
-_Noreturn void led_task_gpio(void* unused_arg) {
-    // This variable will take a copy of the value
-    // added to the FreeRTOS xQueue
-    uint8_t passed_value_buffer = 0;
+// Invoked when device is mounted
+void tud_mount_cb(void) {
+    xTimerChangePeriod(blinky_tm, pdMS_TO_TICKS(BLINK_MOUNTED), 0);
+}
 
-    // Configure the GPIO LED
-    gpio_init(RED_LED_PIN);
-    gpio_set_dir(RED_LED_PIN, GPIO_OUT);
+// Invoked when device is unmounted
+void tud_umount_cb(void) {
+    xTimerChangePeriod(blinky_tm, pdMS_TO_TICKS(BLINK_NOT_MOUNTED), 0);
+}
 
-    while (true) {
-        // Check for an item in the FreeRTOS xQueue
-        if (xQueueReceive(queue, &passed_value_buffer, portMAX_DELAY) == pdPASS) {
-            // Received a value so flash the GPIO LED accordingly
-            // (NOT the sent value)
-            if (passed_value_buffer) log_debug("GPIO LED FLASH");
-            gpio_put(RED_LED_PIN, passed_value_buffer == 1 ? 0 : 1);
+// Invoked when usb bus is suspended
+// remote_wakeup_en : if host allow us  to perform remote wakeup
+// Within 7ms, device must draw an average of current less than 2.5 mA from bus
+void tud_suspend_cb(bool remote_wakeup_en) {
+    (void) remote_wakeup_en;
+    xTimerChangePeriod(blinky_tm, pdMS_TO_TICKS(BLINK_SUSPENDED), 0);
+}
+
+// Invoked when usb bus is resumed
+void tud_resume_cb(void) {
+    xTimerChangePeriod(blinky_tm, pdMS_TO_TICKS(BLINK_MOUNTED), 0);
+}
+
+//--------------------------------------------------------------------+
+// USB HID
+//--------------------------------------------------------------------+
+
+static void send_hid_report(uint8_t report_id, uint32_t btn) {
+    // skip if hid is not ready yet
+    if ( !tud_hid_ready() ) return;
+    switch(report_id) {
+        case REPORT_ID_KEYBOARD: {
+            // Used to avoid send multiple consecutive zero report for keyboard
+            static bool has_keyboard_key = false;
+            if ( btn ) {
+                uint8_t keycode[6] = { 0 };
+                keycode[0] = HID_KEY_A;
+
+                tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, keycode);
+                has_keyboard_key = true;
+            } else {
+                // send empty key report if previously has key pressed
+                if (has_keyboard_key) tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, NULL);
+                has_keyboard_key = false;
+            }
+        }
+        break;
+        case REPORT_ID_MOUSE: {
+            int8_t const delta = 5;
+            // no button, right + down, no scroll, no pan
+            tud_hid_mouse_report(REPORT_ID_MOUSE, 0x00, delta, delta, 0, 0);
+        }
+        break;
+        case REPORT_ID_CONSUMER_CONTROL: {
+            // Used to avoid send multiple consecutive zero report
+            static bool has_consumer_key = false;
+            if ( btn ) {
+                // volume down
+                uint16_t volume_down = HID_USAGE_CONSUMER_VOLUME_DECREMENT;
+                tud_hid_report(REPORT_ID_CONSUMER_CONTROL, &volume_down, 2);
+                has_consumer_key = true;
+            } else {
+                // send empty key report (release key) if previously has key pressed
+                uint16_t empty_key = 0;
+                if (has_consumer_key) tud_hid_report(REPORT_ID_CONSUMER_CONTROL, &empty_key, 2);
+                has_consumer_key = false;
+            }
+        }
+        break;
+        case REPORT_ID_GAMEPAD: {
+            // Used to avoid send multiple consecutive zero report for keyboard
+            static bool has_gamepad_key = false;
+            hid_gamepad_report_t report =
+                {
+                    .x   = 0, .y = 0, .z = 0, .rz = 0, .rx = 0, .ry = 0,
+                    .hat = 0, .buttons = 0
+                };
+            if ( btn ) {
+                report.hat = GAMEPAD_HAT_UP;
+                report.buttons = GAMEPAD_BUTTON_A;
+                tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
+                has_gamepad_key = true;
+            } else {
+                report.hat = GAMEPAD_HAT_CENTERED;
+                report.buttons = 0;
+                if (has_gamepad_key) tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
+                has_gamepad_key = false;
+            }
+        }
+        break;
+        default: break;
+    }
+}
+
+_Noreturn void hid_task(void* param) {
+    (void) param;
+    while(1) {
+        // Poll every 10ms
+        vTaskDelay(pdMS_TO_TICKS(10));
+        uint32_t const btn = board_button_read();
+        // Remote wakeup
+        if ( tud_suspended() && btn ) {
+            // Wake up host if we are in suspend mode
+            // and REMOTE_WAKEUP feature is enabled by host
+            tud_remote_wakeup();
+        } else {
+            // Send the 1st of report chain, the rest will be sent by tud_hid_report_complete_cb()
+            send_hid_report(REPORT_ID_KEYBOARD, btn);
         }
     }
 }
 
-
-/**
- * @brief Generate and print a debug message from a supplied string.
- *
- * @param msg: The base message to which `[DEBUG]` will be prefixed.
- */
-void log_debug(const char* msg) {
-    uint msg_length = 9 + strlen(msg);
-    char* sprintf_buffer = malloc(msg_length);
-    sprintf(sprintf_buffer, "[DEBUG] %s\n", msg);
-#ifdef DEBUG
-    printf("%s", sprintf_buffer);
-#endif
-    free(sprintf_buffer);
-}
-
-
-/**
- * @brief Show basic device info.
- */
-void log_device_info(void) {
-    printf("App: %s %s\n Build: \n", APP_NAME, APP_VERSION);
-}
-
-
-/*
- * RUNTIME START
- */
-int main() {
-    // Enable STDIO
-#ifdef DEBUG
-    stdio_usb_init();
-#endif
-
-    // Set up two tasks
-    // FROM 1.0.1 Store handles referencing the tasks; get return values
-    // NOTE Arg 3 is the stack depth -- in words, not bytes
-    BaseType_t pico_status = xTaskCreate(led_task_pico,
-                                         "PICO_LED_TASK",
-                                         128,
-                                         NULL,
-                                         1,
-                                         &pico_task_handle);
-    BaseType_t gpio_status = xTaskCreate(led_task_gpio,
-                                         "GPIO_LED_TASK",
-                                         128,
-                                         NULL,
-                                         1,
-                                         &gpio_task_handle);
-
-    // Set up the event queue
-    queue = xQueueCreate(4, sizeof(uint8_t));
-
-    // Log app info
-    log_device_info();
-
-    // Start the FreeRTOS scheduler
-    // FROM 1.0.1: Only proceed with valid tasks
-    if (pico_status == pdPASS || gpio_status == pdPASS) {
-        vTaskStartScheduler();
+// Invoked when sent REPORT successfully to host
+// Application can use this to send the next report
+// Note: For composite reports, report[0] is report ID
+void tud_hid_report_complete_cb(uint8_t instance, uint8_t const* report, uint8_t len) {
+    (void) instance;
+    (void) len;
+    uint8_t next_report_id = report[0] + 1;
+    if (next_report_id < REPORT_ID_COUNT) {
+        send_hid_report(next_report_id, board_button_read());
     }
+}
 
-    // We should never get here, but just in case...
-    while(true) {
-        // NOP
-    };
+
+// Invoked when received GET_REPORT control request
+// Application must fill buffer report's content and return its length.
+// Return zero will cause the stack to STALL request
+uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen) {
+    // TODO not Implemented
+    (void) instance;
+    (void) report_id;
+    (void) report_type;
+    (void) buffer;
+    (void) reqlen;
+    return 0;
+}
+
+// Invoked when received SET_REPORT control request or
+// received data on OUT endpoint ( Report ID = 0, Type = 0 )
+void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t const* buffer, uint16_t bufsize) {
+    (void) instance;
+    if (report_type == HID_REPORT_TYPE_OUTPUT) {
+        // Set keyboard LED e.g Capslock, Numlock etc...
+        if (report_id == REPORT_ID_KEYBOARD) {
+            // bufsize should be (at least) 1
+            if ( bufsize < 1 ) return;
+            uint8_t const kbd_leds = buffer[0];
+            if (kbd_leds & KEYBOARD_LED_CAPSLOCK) {
+                // Capslock On: disable blink, turn led on
+                xTimerStop(blinky_tm, portMAX_DELAY);
+                board_led_write(true);
+            } else {
+                // Caplocks Off: back to normal blink
+                board_led_write(false);
+                xTimerStart(blinky_tm, portMAX_DELAY);
+            }
+        }
+    }
+}
+
+// @brief BLINKING TASK
+void led_blinky_cb(TimerHandle_t xTimer) {
+    (void) xTimer;
+    static bool led_state = false;
+    board_led_write(led_state);
+    led_state = 1 - led_state; // toggle
 }
