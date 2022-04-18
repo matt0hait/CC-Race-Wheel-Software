@@ -27,8 +27,8 @@
 
 enum
 {
-  REPORT_ID_KEYBOARD = 1,
-  REPORT_ID_GAMEPAD = 2,
+  REPORT_ID_KEYBOARD,   // ADD "= 2" to add secondary keyboard input
+  REPORT_ID_GAMEPAD = 1,
   REPORT_ID_COUNT
 };
 

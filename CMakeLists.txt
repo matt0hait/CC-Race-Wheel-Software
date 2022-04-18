@@ -16,6 +16,7 @@ list(APPEND SOURCE_FILES
         main.c
         include/tusb_config/usb_descriptors.c
         include/tusb_config/tusb_config.h
+        include/tusb_config/custom_gamepad.h
         )
 
 if (PICO_SDK_VERSION_STRING VERSION_LESS "1.3.0")

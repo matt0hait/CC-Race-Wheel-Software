@@ -29,6 +29,7 @@
 #include "bsp/board.h"
 #include "tusb.h"
 #include "usb_descriptors.h"
+#include "custom_gamepad.h"
 
 // @brief Static task for USBD
 #if CFG_TUSB_DEBUG
@@ -42,8 +43,65 @@
 
 #define FIRST_BUTTON_GPIO   2   // @brief First button GPIO number
 #define BUTTON_CNT          12  // @brief Number of buttons
+#define ENCODER_CNT         5   // @brief Number of Encoders
+#define ENCODER_MAX         15  // @brief Encoder max count
+#define ENCODER_PIN_CNT     (2*ENCODER_CNT)
+#define MASK(x) (1UL << (x))
 
 uint16_t btnBuff = 0;           // @brief Button state buffer
+
+// @brief Quadrature Encoder values for calculating steps
+struct		encoder {
+    uint32_t	Encoder_A;      // @brief Encoder Input Pin A
+    uint32_t	Encoder_B;      // @brief Encoder Input Pin B
+    bool			old_b;      // @brief Encoder B previous state
+    bool			old_a;      // @brief Encoder A previous state
+    bool			new_a;      // @brief Encoder A current state
+    bool			new_b;      // @brief Encoder B current state
+    uint8_t         new_count;  // @brief Current count from home
+} encoder;
+struct encoder encoders[ENCODER_CNT];   // @brief array of encoder values
+const int enc_LUT[16] = {0, -1, 1, 2, 1, 0, 2, -1, -1, 2, 0, 1, 2, 1, -1, 0}; // @brief Lookup table for encoder step from interrupts
+const uint8_t encoder_pins[10] = {14, 15,
+                                  16, 17,
+                                  18, 19,
+                                  20, 21,
+                                  22, 28};
+
+void encoder_callback(uint gpio, uint32_t events) {
+    // Loop through axes and set new input
+    size_t i = 0;
+    for ( ; i < ENCODER_CNT; i++) {
+        // Check A of encoder
+        if (gpio & MASK(encoders[i].Encoder_A)) {
+            encoders[i].new_a = gpio_get(encoders[i].Encoder_A);
+            break;	// Exit, no need to iterate through rest of axes.
+        }
+        // Check B of encoder
+        if (gpio & MASK(encoders[i].Encoder_B)) {
+            encoders[i].new_b = gpio_get(encoders[i].Encoder_B);
+            break;
+        }
+    }
+    // Calculate count of interrupt axis
+    int old_sum = (encoders[i].old_a << 1) + encoders[i].old_b;
+    int new_sum = (encoders[i].new_a << 1) + encoders[i].new_b;
+    encoders[i].new_count +=  enc_LUT[old_sum*4+new_sum];
+    // TODO: Check if LUT = 2 (encoder skipped a step) then reboot, rehome, or count errors.
+    // Check for count overflows
+    if(encoders[i].new_count > ENCODER_MAX) {
+        encoders[i].new_count = ENCODER_MAX;  // Clamp count
+    }
+    if(encoders[i].new_count == ((uint8_t)-1)) {
+        // Axis has turned below 0, clamp count
+        encoders[i].new_count = 0;
+    }
+    // Update old values for next interrupt
+    encoders[i].old_a = encoders[i].new_a;
+    encoders[i].old_b = encoders[i].new_b;
+    // clear status flags
+    events &= ~0xF;
+}
 
 
 void init_gpio(void) {
@@ -54,6 +112,25 @@ void init_gpio(void) {
         gpio_pull_up(gpio); // All buttons pull to ground when pressed
         gpio_set_input_hysteresis_enabled(gpio,true); // Enable Schmitt triggers to debounce. Set slew rate if further issues.
     }
+    // Setup Encoders
+    for (int gpio = 0, gpio_pins = 0; gpio < ENCODER_CNT; gpio++, gpio_pins += 2) {
+        encoders[gpio].Encoder_A = encoder_pins[gpio_pins];
+        encoders[gpio].Encoder_B = encoder_pins[gpio_pins+1];
+    }
+    for (int gpio = 0; gpio < ENCODER_PIN_CNT; gpio++) {
+        gpio_init(encoder_pins[gpio]);
+        gpio_set_dir(encoder_pins[gpio], GPIO_IN);
+        gpio_pull_up(encoder_pins[gpio]); // All buttons pull to ground when pressed
+        gpio_set_input_hysteresis_enabled(encoder_pins[gpio],true); // Enable Schmitt triggers to debounce. Set slew rate if further issues.
+        // Init Encoders params
+        // TODO: Load from NVM to save encoder values
+        encoders[gpio/2].old_a = gpio_get(encoders[gpio/2].Encoder_A);
+        encoders[gpio/2].old_b = gpio_get(encoders[gpio/2].Encoder_B);
+        encoders[gpio/2].new_count = 0;
+        // Start Interrupts
+        gpio_set_irq_enabled_with_callback(encoder_pins[gpio], GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &encoder_callback);
+    }
+
     /*
     // Setup DMA on buttons. Note, 12 DMA channels.
     int chan = dma_claim_unused_channel(true);
@@ -133,45 +210,34 @@ void tud_resume_cb(void) {
 //--------------------------------------------------------------------+
 
 static void send_hid_report(uint8_t report_id, uint32_t btn) {
-    // skip if hid is not ready yet
-    if ( !tud_hid_ready() ) return;
+    if ( !tud_hid_ready() ) return; // skip if hid is not ready yet
     switch(report_id) {
         case REPORT_ID_KEYBOARD: {
-            // Used to avoid send multiple consecutive zero report for keyboard
-            static bool has_keyboard_key = false;
-            if ( btn ) {
-                uint8_t keycode[6] = { 0 };
-                keycode[0] = HID_KEY_F24;
-
-                tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, keycode);
-                has_keyboard_key = true;
-            } else {
-                // send empty key report if previously has key pressed
-                if (has_keyboard_key) tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, NULL);
-                has_keyboard_key = false;
-            }
+            // No use at this time
         }
         break;
         case REPORT_ID_GAMEPAD: {
-            // Used to avoid send multiple consecutive zero report for keyboard
-            static bool has_gamepad_key = false;
-            hid_gamepad_report_t report = {
-                //.x   = 0, .y = 0, .z = 0, .rz = 0, .rx = 0, .ry = 0, // TODO: Add temps sensor or IMU
+            hid_custom_gamepad_report_t report = {
+                .clutch = 0,
                 .hat = 0,
-                .buttons = 0
+                .buttons = 0,
+                .dial_1 = 0,
+                .dial_2 = 0,
+                .dial_3 = 0,
+                .dial_4 = 0
             };
-            //gpio_get
+            report.dial_0 = TU_BIT(encoders[0].new_count);
+            report.dial_1 = TU_BIT(encoders[1].new_count);
+            report.dial_2 = TU_BIT(encoders[2].new_count);
+            report.dial_3 = TU_BIT(encoders[3].new_count);
+            report.dial_4 = TU_BIT(encoders[4].new_count);
+
             if ( btn ) {
                 report.hat = GAMEPAD_HAT_UP;
-                report.buttons = GAMEPAD_BUTTON_A;
-                tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
-                has_gamepad_key = true;
             } else {
                 report.hat = GAMEPAD_HAT_CENTERED;
-                report.buttons = 0;
-                if (has_gamepad_key) tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
-                has_gamepad_key = false;
             }
+            tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
         }
         break;
         default: break;
@@ -189,7 +255,7 @@ _Noreturn static void hid_task() {
             tud_remote_wakeup();
         } else {
             // Send the 1st of report chain, the rest will be sent by tud_hid_report_complete_cb()
-            send_hid_report(REPORT_ID_KEYBOARD, btn);
+            send_hid_report(REPORT_ID_GAMEPAD, btn);
         }
     }
 }
