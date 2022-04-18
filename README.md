@@ -36,6 +36,9 @@ By Matthew Hait
     - https://github.com/hathach/tinyusb/tree/master/src/portable/raspberrypi/rp2040
     - https://github.com/hathach/tinyusb/tree/master/examples/device/hid_composite_freertos
   - CDC ACM port
+  - DMA if used: https://www.youtube.com/watch?v=-Wh3SIAl0Ic
+  - GPIO
+    - https://raspberrypi.github.io/pico-sdk-doxygen/group__hardware__gpio.html
 ###Tasking
 - FreeRTOS
   - https://github.com/smittytone/RP2040-FreeRTOS
