@@ -231,6 +231,10 @@ static void send_hid_report(uint8_t report_id, uint32_t btn) {
             report.dial_2 = TU_BIT(encoders[2].new_count);
             report.dial_3 = TU_BIT(encoders[3].new_count);
             report.dial_4 = TU_BIT(encoders[4].new_count);
+            // Grab button data
+            for (int gpio = FIRST_BUTTON_GPIO, offset = 0; gpio < FIRST_BUTTON_GPIO + BUTTON_CNT; gpio++, offset++) {
+                if (gpio_get(gpio) == 0) report.buttons |= TU_BIT(offset);
+            }
 
             if ( btn ) {
                 report.hat = GAMEPAD_HAT_UP;
