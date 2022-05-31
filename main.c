@@ -10,6 +10,12 @@
 #include <sys/cdefs.h>
 // FreeRTOS
 #include <FreeRTOS.h>
+#ifdef __GNUC__
+    #define USED __attribute__((used))
+#else
+    #define USED
+#endif
+//const int USED uxTopUsedPriority = configMAX_PRIORITIES - 1;
 #include <task.h>
 #include <queue.h>
 #include "semphr.h"
@@ -22,8 +28,11 @@
 #include <time.h>
 // Pico SDK
 #include "pico/stdlib.h"            // Includes `hardware_gpio.h`
+#include "pico/bootrom.h"
 #include "pico/binary_info.h"
 #include "hardware/gpio.h"
+#include "hardware/timer.h"
+#include "hardware/irq.h"
 //#include "hardware/dma.h"
 // TinyUSB
 #include "bsp/board.h"
@@ -45,10 +54,12 @@
 #define BUTTON_CNT          12  // @brief Number of buttons
 #define ENCODER_CNT         5   // @brief Number of Encoders
 #define ENCODER_MAX         15  // @brief Encoder max count
-#define ENCODER_PIN_CNT     (2*ENCODER_CNT)
+#define ENCODER_PIN_CNT     10
 #define MASK(x) (1UL << (x))
 
 uint16_t btnBuff = 0;           // @brief Button state buffer
+
+static uint32_t RTOS_RunTimeCounter;    // @brief runtime counter, used for configGENERATE_RUNTIME_STATS
 
 // @brief Quadrature Encoder values for calculating steps
 struct		encoder {
@@ -59,6 +70,7 @@ struct		encoder {
     bool			new_a;      // @brief Encoder A current state
     bool			new_b;      // @brief Encoder B current state
     uint8_t         new_count;  // @brief Current count from home
+    uint8_t         reset_cnt;  // @brief Reset position by rotating counterclockwise at least 2 full rotations to the lowest position.
 } encoder;
 struct encoder encoders[ENCODER_CNT];   // @brief array of encoder values
 const int enc_LUT[16] = {0, -1, 1, 2, 1, 0, 2, -1, -1, 2, 0, 1, 2, 1, -1, 0}; // @brief Lookup table for encoder step from interrupts
@@ -73,12 +85,12 @@ void encoder_callback(uint gpio, uint32_t events) {
     size_t i = 0;
     for ( ; i < ENCODER_CNT; i++) {
         // Check A of encoder
-        if (gpio & MASK(encoders[i].Encoder_A)) {
+        if ((uint)gpio == (uint)encoders[i].Encoder_A) {
             encoders[i].new_a = gpio_get(encoders[i].Encoder_A);
             break;	// Exit, no need to iterate through rest of axes.
         }
         // Check B of encoder
-        if (gpio & MASK(encoders[i].Encoder_B)) {
+        if ((uint)gpio == (uint)encoders[i].Encoder_B) {
             encoders[i].new_b = gpio_get(encoders[i].Encoder_B);
             break;
         }
@@ -86,15 +98,28 @@ void encoder_callback(uint gpio, uint32_t events) {
     // Calculate count of interrupt axis
     int old_sum = (encoders[i].old_a << 1) + encoders[i].old_b;
     int new_sum = (encoders[i].new_a << 1) + encoders[i].new_b;
-    encoders[i].new_count +=  enc_LUT[old_sum*4+new_sum];
+    int inc = old_sum*4+new_sum;
+    encoders[i].new_count +=  enc_LUT[inc];
+    // If rotating counterclockwise, add to reset sequence.
+    if (enc_LUT[inc] == 1) {
+        encoders[i].reset_cnt++;
+    }
+    if (enc_LUT[inc] == -1) {
+        // Normal behaviour, reset the "Reset" counter.
+        encoders[i].reset_cnt = 0;
+    }
+    if (encoders[i].reset_cnt > 30) {
+        // Encoder has been rotated counterclockwise consistently for two rotations, reset to the lowest position.
+        encoders[i].new_count = 0;
+    }
     // TODO: Check if LUT = 2 (encoder skipped a step) then reboot, rehome, or count errors.
     // Check for count overflows
-    if(encoders[i].new_count > ENCODER_MAX) {
-        encoders[i].new_count = ENCODER_MAX;  // Clamp count
-    }
     if(encoders[i].new_count == ((uint8_t)-1)) {
         // Axis has turned below 0, clamp count
-        encoders[i].new_count = 0;
+        encoders[i].new_count = ENCODER_MAX;
+    }
+    if(encoders[i].new_count > ENCODER_MAX) {
+        encoders[i].new_count = 0;  // Clamp count
     }
     // Update old values for next interrupt
     encoders[i].old_a = encoders[i].new_a;
@@ -127,6 +152,7 @@ void init_gpio(void) {
         encoders[gpio/2].old_a = gpio_get(encoders[gpio/2].Encoder_A);
         encoders[gpio/2].old_b = gpio_get(encoders[gpio/2].Encoder_B);
         encoders[gpio/2].new_count = 0;
+        encoders[gpio/2].reset_cnt = 0;
         // Start Interrupts
         gpio_set_irq_enabled_with_callback(encoder_pins[gpio], GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &encoder_callback);
     }
@@ -235,12 +261,13 @@ static void send_hid_report(uint8_t report_id, uint32_t btn) {
             for (int gpio = FIRST_BUTTON_GPIO, offset = 0; gpio < FIRST_BUTTON_GPIO + BUTTON_CNT; gpio++, offset++) {
                 if (gpio_get(gpio) == 0) report.buttons |= TU_BIT(offset);
             }
-
-            if ( btn ) {
-                report.hat = GAMEPAD_HAT_UP;
-            } else {
-                report.hat = GAMEPAD_HAT_CENTERED;
+            // Reboot if first 5 buttons are pressed simultaneously
+            if (report.buttons == 31) {
+                reset_usb_boot(0,0);
             }
+//            if ( btn ) {
+//                reset_usb_boot(0,0);
+//            }
             tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
         }
         break;
@@ -309,4 +336,17 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
             }
         }
     }
+}
+
+// Setup function for portCONFIGURE_TIMER_FOR_RUN_TIME_STATS
+// Enables run time tracking
+void RTOS_AppConfigureTimerForRuntimeStats(void) {
+    RTOS_RunTimeCounter = 0;
+    //EnableIRQ(FTM0_IRQn);
+}
+
+// Callback function for portCONFIGURE_TIMER_FOR_RUN_TIME_STATS
+// Enables run time tracking
+uint32_t RTOS_AppGetRuntimeCounterValueFromISR(void) {
+    return time_us_32();
 }
