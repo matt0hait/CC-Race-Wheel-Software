@@ -1,10 +1,12 @@
-#Race Wheel Software
+# Race Wheel Software
 By Matthew Hait
 
-##GPIO BOM
+Softare for USB sim racing steering wheel running on FreeRTOS.
+
+## GPIO BOM
 ![Raspberry Pi Pico Pinout](./Documentation/Raspberry_Pi_Pico_Pinout.PNG)
 
-###User Inputs
+### User Inputs
 
 - 12 - Buttons
   - OP: One output each
@@ -23,13 +25,13 @@ By Matthew Hait
   - PN: RKJXT1F
   - OP: 4 POS + rotate + press
   - GPIO: **TBD**
-###Other
+### Other
   
 - Internal Temp Sensor
   - OP: P.589 RP2040 Datasheet 
   - GPIO: ain_sel #4
 
-###Outputs
+### Outputs
 - USB HID Gamepad
   - TinyUSB:
     - See examples "pico-examples\usb\device\dev_hid_composite" 
@@ -39,7 +41,7 @@ By Matthew Hait
   - DMA if used: https://www.youtube.com/watch?v=-Wh3SIAl0Ic
   - GPIO
     - https://raspberrypi.github.io/pico-sdk-doxygen/group__hardware__gpio.html
-###Tasking
+### Tasking
 - FreeRTOS
   - https://github.com/smittytone/RP2040-FreeRTOS
 
