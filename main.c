@@ -50,8 +50,8 @@
 // @brief Static task for hid
 #define HID_STACK_SIZE      configMINIMAL_STACK_SIZE
 
-#define FIRST_BUTTON_GPIO   2   // @brief First button GPIO number
-#define BUTTON_CNT          12  // @brief Number of buttons
+#define FIRST_BUTTON_GPIO   0   // @brief First button GPIO number
+#define BUTTON_CNT          14  // @brief Number of buttons
 #define ENCODER_CNT         5   // @brief Number of Encoders
 #define ENCODER_MAX         15  // @brief Encoder max count
 #define ENCODER_PIN_CNT     10
