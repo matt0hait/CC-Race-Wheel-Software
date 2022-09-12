@@ -261,13 +261,10 @@ static void send_hid_report(uint8_t report_id, uint32_t btn) {
             for (int gpio = FIRST_BUTTON_GPIO, offset = 0; gpio < FIRST_BUTTON_GPIO + BUTTON_CNT; gpio++, offset++) {
                 if (gpio_get(gpio) == 0) report.buttons |= TU_BIT(offset);
             }
-            // Reboot if first 5 buttons are pressed simultaneously
-            if (report.buttons == 31) {
+            // Reboot if GPIO 3, 5, 7, 9, & 11 are pressed simultaneously.
+            if ((report.buttons & 0x554) == 0x554) {
                 reset_usb_boot(0,0);
             }
-//            if ( btn ) {
-//                reset_usb_boot(0,0);
-//            }
             tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
         }
         break;
