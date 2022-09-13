@@ -54,7 +54,8 @@
 #define BUTTON_CNT          14  // @brief Number of buttons
 #define ENCODER_CNT         5   // @brief Number of Encoders
 #define ENCODER_MAX         15  // @brief Encoder max count
-#define ENCODER_PIN_CNT     10
+#define ENCODER_PIN_CNT     10  // @brief Number of encoder pins
+#define PACKET_HOLD_CNT     10  // @brief Number of packets to hold encoder input
 #define MASK(x) (1UL << (x))
 
 uint16_t btnBuff = 0;           // @brief Button state buffer
@@ -70,10 +71,11 @@ struct		encoder {
     bool			new_a;      // @brief Encoder A current state
     bool			new_b;      // @brief Encoder B current state
     uint8_t         new_count;  // @brief Current count from home
-    uint8_t         reset_cnt;  // @brief Reset position by rotating counterclockwise at least 2 full rotations to the lowest position.
+    uint8_t         hold_count; // @brief Reset position by rotating counterclockwise at least 2 full rotations to the lowest position.
 } encoder;
 struct encoder encoders[ENCODER_CNT];   // @brief array of encoder values
-const int enc_LUT[16] = {0, -1, 1, 2, 1, 0, 2, -1, -1, 2, 0, 1, 2, 1, -1, 0}; // @brief Lookup table for encoder step from interrupts
+const int enc_LUT[16] = {0, 1, 2, 0, 2, 0, 0, 1, 1, 0, 0, 2, 0, 2, 1, 0}; // @brief Lookup table for encoder step from interrupts; 1: dec, 2: inc
+const int enc_LU2T[16]= {0, -1, 1, 2, 1, 0, 2, -1, -1, 2, 0, 1, 2, 1, -1, 0}; // @brief Lookup table for encoder step from interrupts
 const uint8_t encoder_pins[10] = {14, 15,
                                   16, 17,
                                   18, 19,
@@ -83,14 +85,14 @@ const uint8_t encoder_pins[10] = {14, 15,
 void encoder_callback(uint gpio, uint32_t events) {
     // Loop through axes and set new input
     size_t i = 0;
-    for ( ; i < ENCODER_CNT; i++) {
+    for (; i < ENCODER_CNT; i++) {
         // Check A of encoder
-        if ((uint)gpio == (uint)encoders[i].Encoder_A) {
+        if ((uint) gpio == (uint) encoders[i].Encoder_A) {
             encoders[i].new_a = gpio_get(encoders[i].Encoder_A);
-            break;	// Exit, no need to iterate through rest of axes.
+            break;    // Exit, no need to iterate through rest of axes.
         }
         // Check B of encoder
-        if ((uint)gpio == (uint)encoders[i].Encoder_B) {
+        if ((uint) gpio == (uint) encoders[i].Encoder_B) {
             encoders[i].new_b = gpio_get(encoders[i].Encoder_B);
             break;
         }
@@ -98,32 +100,13 @@ void encoder_callback(uint gpio, uint32_t events) {
     // Calculate count of interrupt axis
     int old_sum = (encoders[i].old_a << 1) + encoders[i].old_b;
     int new_sum = (encoders[i].new_a << 1) + encoders[i].new_b;
-    int inc = old_sum*4+new_sum;
-    encoders[i].new_count +=  enc_LUT[inc];
-    // If rotating counterclockwise, add to reset sequence.
-    if (enc_LUT[inc] == 1) {
-        encoders[i].reset_cnt++;
+    int inc = old_sum * 4 + new_sum;
+    if (encoders[i].hold_count == 0) {
+       encoders[i].new_count = enc_LUT[inc];
+       encoders[i].hold_count = PACKET_HOLD_CNT;
     }
-    if (enc_LUT[inc] == -1) {
-        // Normal behaviour, reset the "Reset" counter.
-        encoders[i].reset_cnt = 0;
-    }
-    if (encoders[i].reset_cnt > 30) {
-        // Encoder has been rotated counterclockwise consistently for two rotations, reset to the lowest position.
-        encoders[i].new_count = 0;
-    }
-    // TODO: Check if LUT = 2 (encoder skipped a step) then reboot, rehome, or count errors.
-    // Check for count overflows
-    if(encoders[i].new_count == ((uint8_t)-1)) {
-        // Axis has turned below 0, clamp count
-        encoders[i].new_count = ENCODER_MAX;
-    }
-    if(encoders[i].new_count > ENCODER_MAX) {
-        encoders[i].new_count = 0;  // Clamp count
-    }
-    // Update old values for next interrupt
-    encoders[i].old_a = encoders[i].new_a;
-    encoders[i].old_b = encoders[i].new_b;
+
+
     // clear status flags
     events &= ~0xF;
 }
@@ -152,7 +135,7 @@ void init_gpio(void) {
         encoders[gpio/2].old_a = gpio_get(encoders[gpio/2].Encoder_A);
         encoders[gpio/2].old_b = gpio_get(encoders[gpio/2].Encoder_B);
         encoders[gpio/2].new_count = 0;
-        encoders[gpio/2].reset_cnt = 0;
+        encoders[gpio/2].hold_count = 0;
         // Start Interrupts
         gpio_set_irq_enabled_with_callback(encoder_pins[gpio], GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &encoder_callback);
     }
@@ -252,11 +235,11 @@ static void send_hid_report(uint8_t report_id, uint32_t btn) {
                 .dial_3 = 0,
                 .dial_4 = 0
             };
-            report.dial_0 = TU_BIT(encoders[0].new_count);
-            report.dial_1 = TU_BIT(encoders[1].new_count);
-            report.dial_2 = TU_BIT(encoders[2].new_count);
-            report.dial_3 = TU_BIT(encoders[3].new_count);
-            report.dial_4 = TU_BIT(encoders[4].new_count);
+            report.dial_0 = encoders[0].new_count;
+            report.dial_1 = encoders[1].new_count;
+            report.dial_2 = encoders[2].new_count;
+            report.dial_3 = encoders[3].new_count;
+            report.dial_4 = encoders[4].new_count;
             // Grab button data
             for (int gpio = FIRST_BUTTON_GPIO, offset = 0; gpio < FIRST_BUTTON_GPIO + BUTTON_CNT; gpio++, offset++) {
                 if (gpio_get(gpio) == 0) report.buttons |= TU_BIT(offset);
@@ -266,6 +249,13 @@ static void send_hid_report(uint8_t report_id, uint32_t btn) {
                 reset_usb_boot(0,0);
             }
             tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
+            for (uint8_t i = 0; i < ENCODER_CNT-1; i++) {
+                if(encoders[i].hold_count == 0) {
+                    encoders[i].new_count = 0;
+                } else {
+                    encoders[i].hold_count -= 1;
+                }
+            }
         }
         break;
         default: break;
