@@ -87,7 +87,7 @@ void encoder_callback(uint gpio, uint32_t events) {
     size_t i = 0;
     for (; i < ENCODER_CNT; i++) {
         // Check A of encoder
-        if ((uint) gpio == (uint) encoders[i].Encoder_A) {
+        if ((uint)gpio == (uint)encoders[i].Encoder_A) {
             encoders[i].new_a = gpio_get(encoders[i].Encoder_A);
             break;    // Exit, no need to iterate through rest of axes.
         }
@@ -105,8 +105,9 @@ void encoder_callback(uint gpio, uint32_t events) {
        encoders[i].new_count = enc_LUT[inc];
        encoders[i].hold_count = PACKET_HOLD_CNT;
     }
-
-
+    // Update old values for next interrupt
+    encoders[i].old_a = encoders[i].new_a;
+    encoders[i].old_b = encoders[i].new_b;
     // clear status flags
     events &= ~0xF;
 }
@@ -119,6 +120,7 @@ void init_gpio(void) {
         gpio_set_dir(gpio, GPIO_IN);
         gpio_pull_up(gpio); // All buttons pull to ground when pressed
         gpio_set_input_hysteresis_enabled(gpio,true); // Enable Schmitt triggers to debounce. Set slew rate if further issues.
+        gpio_set_slew_rate(gpio, GPIO_SLEW_RATE_SLOW );
     }
     // Setup Encoders
     for (int gpio = 0, gpio_pins = 0; gpio < ENCODER_CNT; gpio++, gpio_pins += 2) {
@@ -129,7 +131,9 @@ void init_gpio(void) {
         gpio_init(encoder_pins[gpio]);
         gpio_set_dir(encoder_pins[gpio], GPIO_IN);
         gpio_pull_up(encoder_pins[gpio]); // All buttons pull to ground when pressed
-        gpio_set_input_hysteresis_enabled(encoder_pins[gpio],true); // Enable Schmitt triggers to debounce. Set slew rate if further issues.
+        // Fast trigger *happens* to work better with tested HW setup
+        gpio_set_input_hysteresis_enabled(encoder_pins[gpio],false); // Enable Schmitt triggers to debounce. Set slew rate if further issues.
+        gpio_set_slew_rate(gpio, GPIO_SLEW_RATE_FAST);
         // Init Encoders params
         // TODO: Load from NVM to save encoder values
         encoders[gpio/2].old_a = gpio_get(encoders[gpio/2].Encoder_A);
@@ -244,8 +248,8 @@ static void send_hid_report(uint8_t report_id, uint32_t btn) {
             for (int gpio = FIRST_BUTTON_GPIO, offset = 0; gpio < FIRST_BUTTON_GPIO + BUTTON_CNT; gpio++, offset++) {
                 if (gpio_get(gpio) == 0) report.buttons |= TU_BIT(offset);
             }
-            // Reboot if GPIO 3, 5, 7, 9, & 11 are pressed simultaneously.
-            if ((report.buttons & 0x554) == 0x554) {
+            // Reboot if GPIO 3, 5, 7, & 9 are pressed simultaneously.
+            if ((report.buttons & 0x154) == 0x154) {
                 reset_usb_boot(0,0);
             }
             tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
