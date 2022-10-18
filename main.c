@@ -126,20 +126,20 @@ void init_gpio(void) {
     for (int gpio = 0, gpio_pins = 0; gpio < ENCODER_CNT; gpio++, gpio_pins += 2) {
         encoders[gpio].Encoder_A = encoder_pins[gpio_pins];
         encoders[gpio].Encoder_B = encoder_pins[gpio_pins+1];
+        // Init Encoders params
+        // TODO: Load from NVM to save encoder values
+        encoders[gpio].old_a = gpio_get(encoders[gpio].Encoder_A);
+        encoders[gpio].old_b = gpio_get(encoders[gpio].Encoder_B);
+        encoders[gpio].new_count = 0;
+        encoders[gpio].hold_count = 0;
     }
     for (int gpio = 0; gpio < ENCODER_PIN_CNT; gpio++) {
         gpio_init(encoder_pins[gpio]);
         gpio_set_dir(encoder_pins[gpio], GPIO_IN);
         gpio_pull_up(encoder_pins[gpio]); // All buttons pull to ground when pressed
         // Fast trigger *happens* to work better with tested HW setup
-        gpio_set_input_hysteresis_enabled(encoder_pins[gpio],false); // Enable Schmitt triggers to debounce. Set slew rate if further issues.
-        gpio_set_slew_rate(gpio, GPIO_SLEW_RATE_FAST);
-        // Init Encoders params
-        // TODO: Load from NVM to save encoder values
-        encoders[gpio/2].old_a = gpio_get(encoders[gpio/2].Encoder_A);
-        encoders[gpio/2].old_b = gpio_get(encoders[gpio/2].Encoder_B);
-        encoders[gpio/2].new_count = 0;
-        encoders[gpio/2].hold_count = 0;
+        gpio_set_input_hysteresis_enabled(encoder_pins[gpio],true); // Enable Schmitt triggers to debounce. Set slew rate if further issues.
+        gpio_set_slew_rate(gpio, GPIO_SLEW_RATE_SLOW);
         // Start Interrupts
         gpio_set_irq_enabled_with_callback(encoder_pins[gpio], GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &encoder_callback);
     }
@@ -234,6 +234,7 @@ static void send_hid_report(uint8_t report_id, uint32_t btn) {
                 .clutch = 0,
                 .hat = 0,
                 .buttons = 0,
+                .dial_0 = 0,
                 .dial_1 = 0,
                 .dial_2 = 0,
                 .dial_3 = 0,
@@ -253,7 +254,7 @@ static void send_hid_report(uint8_t report_id, uint32_t btn) {
                 reset_usb_boot(0,0);
             }
             tud_hid_report(REPORT_ID_GAMEPAD, &report, sizeof(report));
-            for (uint8_t i = 0; i < ENCODER_CNT-1; i++) {
+            for (uint8_t i = 0; i < ENCODER_CNT; i++) {
                 if(encoders[i].hold_count == 0) {
                     encoders[i].new_count = 0;
                 } else {
