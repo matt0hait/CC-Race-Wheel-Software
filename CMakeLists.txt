@@ -11,6 +11,7 @@ set(CMAKE_CXX_STANDARD 17)
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 set(FREERTOS_SRC_DIRECTORY "${CMAKE_SOURCE_DIR}/include/FreeRTOS-Kernel")
 set(FREERTOS_CFG_DIRECTORY "${CMAKE_SOURCE_DIR}/include/FreeRTOS")
+set(TRACE_RECORDER_SRC_DIRECTORY "${CMAKE_SOURCE_DIR}/include/TraceRecorder")
 
 list(APPEND SOURCE_FILES
         main.c
@@ -46,6 +47,44 @@ target_include_directories(FreeRTOS PUBLIC
         ${FREERTOS_CFG_DIRECTORY}/
         ${FREERTOS_SRC_DIRECTORY}/include
         ${FREERTOS_SRC_DIRECTORY}/portable/GCC/ARM_CM0
+        ${FREERTOS_SRC_DIRECTORY}/portable/GCC/MemMang
+        )
+
+
+add_library(TraceRecorder STATIC
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcAssert.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcCounter.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcDiagnostics.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcEntryTable.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcError.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcEvent.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcEventBuffer.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcExtension.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcHardwarePort.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcHeap.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcInternalEventBuffer.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcInterval.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcISR.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcKernelPort.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcMultiCoreEventBuffer.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcObject.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcPrint.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcSnapshotRecorder.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcStackMonitor.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcStateMachine.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcStaticBuffer.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcStreamingRecorder.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcString.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcTask.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/trcTimestamp.c
+        ${TRACE_RECORDER_SRC_DIRECTORY}/streamports/RingBuffer/trcStreamPort.c
+        )
+target_include_directories(TraceRecorder PUBLIC
+        ${TRACE_RECORDER_SRC_DIRECTORY}/
+        ${TRACE_RECORDER_SRC_DIRECTORY}/config
+        ${TRACE_RECORDER_SRC_DIRECTORY}/include
+        ${TRACE_RECORDER_SRC_DIRECTORY}/extras
+        ${TRACE_RECORDER_SRC_DIRECTORY}/streamports
         )
 
 add_compile_options(-Wall
@@ -53,7 +92,16 @@ add_compile_options(-Wall
         -Wno-unused-function # we have some for the docs that aren't called
         -Wno-maybe-uninitialized
         )
-include_directories(include/tusb_config/ include/utils/FreeRTOS/ PUBLIC)
+include_directories(    include/tusb_config/
+                        include/FreeRTOS/
+                        include/TraceRecorder/
+                        include/TraceRecorder/include
+                        include/TraceRecorder/config
+                        include/TraceRecorder/streamports/
+                        include/TraceRecorder/streamports/RingBuffer/include/
+                        include/TraceRecorder/streamports/RingBuffer/config/ PUBLIC
+        )
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
-target_link_libraries(${PROJECT_NAME} pico_stdlib FreeRTOS tinyusb_device tinyusb_board)
+target_link_libraries(TraceRecorder FreeRTOS)
+target_link_libraries(${PROJECT_NAME} pico_stdlib FreeRTOS TraceRecorder tinyusb_device tinyusb_board)
 pico_add_extra_outputs(${PROJECT_NAME})

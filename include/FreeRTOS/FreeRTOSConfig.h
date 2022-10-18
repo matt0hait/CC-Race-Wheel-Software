@@ -62,6 +62,7 @@
 /* Memory allocation related definitions. */
 #define configSUPPORT_STATIC_ALLOCATION         0           // Changed for test, might blow up.
 #define configSUPPORT_DYNAMIC_ALLOCATION        1           // Get FreeRTOS to allocation task memory
+#define configTOTAL_HEAP_SIZE                   10240
 #define configAPPLICATION_ALLOCATED_HEAP        1
 
 /* Hook function related definitions. */
@@ -115,5 +116,8 @@ extern uint32_t RTOS_AppGetRuntimeCounterValueFromISR(void);
 #define INCLUDE_xTaskResumeFromISR              1
 
 /* A header file that defines trace macro can be included here. */
+#if (configUSE_TRACE_FACILITY == 1)
+#include "trcRecorder.h"
+#endif
 
 #endif /* FREERTOS_CONFIG_H */

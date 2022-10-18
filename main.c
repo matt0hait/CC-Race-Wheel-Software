@@ -191,6 +191,7 @@ _Noreturn static void hid_task();
 int main(void) {
     board_init();
     init_gpio();
+    xTraceEnable(TRC_START);
     xTaskCreate( usb_device_task, "usbd", USBD_STACK_SIZE, NULL, configMAX_PRIORITIES-3, &handle_usb_device_task);  // Create a task for tinyusb device stack
     xTaskCreate(hid_task, "hid", HID_STACK_SIZE, NULL, configMAX_PRIORITIES - 2, &handle_hid_task);  // Create HID task
     xTaskCreate(encoder_task, "enc", HID_STACK_SIZE, NULL, configMAX_PRIORITIES - 1, &handle_encoder_task);  // Create encoder task

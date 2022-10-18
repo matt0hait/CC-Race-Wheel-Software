@@ -1,0 +1,10 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Debug Test" type="com.jetbrains.cidr.embedded.customgdbserver.type" factoryName="com.jetbrains.cidr.embedded.customgdbserver.factory" PROGRAM_PARAMS="-f .\interface\picoprobe.cfg -f .\target\rp2040.cfg" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" WORKING_DIR="file://$PROJECT_DIR$/../openocd_picoprobe/tcl" PASS_PARENT_ENVS_2="true" PROJECT_NAME="CC-Race-Wheel-Software" TARGET_NAME="CC-Race-Wheel-Software" CONFIG_NAME="Debug-WSL" version="1" RUN_TARGET_PROJECT_NAME="CC-Race-Wheel-Software" RUN_TARGET_NAME="CC-Race-Wheel-Software">
+    <custom-gdb-server version="1" gdb-connect="tcp:localhost:3333" executable="C:\Users\PoisonGryphon\Documents\My Files\proj\pico\openocd_picoprobe\openocd.exe" warmup-ms="0" download-type="ALWAYS" reset-cmd="monitor reset" reset-after-download="true">
+      <debugger kind="GDB" isBundled="true" />
+    </custom-gdb-server>
+    <method v="2">
+      <option name="CLION.COMPOUND.BUILD" enabled="true" />
+    </method>
+  </configuration>
+</component>
