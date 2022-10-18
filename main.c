@@ -62,6 +62,13 @@ uint16_t btnBuff = 0;           // @brief Button state buffer
 
 static uint32_t RTOS_RunTimeCounter;    // @brief runtime counter, used for configGENERATE_RUNTIME_STATS
 
+// Inter-task queues
+QueueHandle_t enc_irq_queue = NULL;
+// Task handles
+TaskHandle_t handle_usb_device_task = NULL;
+TaskHandle_t handle_hid_task = NULL;
+TaskHandle_t handle_encoder_task = NULL;
+
 // @brief Quadrature Encoder values for calculating steps
 struct		encoder {
     uint32_t	Encoder_A;      // @brief Encoder Input Pin A
@@ -83,33 +90,46 @@ const uint8_t encoder_pins[10] = {14, 15,
                                   22, 28};
 
 void encoder_callback(uint gpio, uint32_t events) {
-    // Loop through axes and set new input
-    size_t i = 0;
-    for (; i < ENCODER_CNT; i++) {
-        // Check A of encoder
-        if ((uint)gpio == (uint)encoders[i].Encoder_A) {
-            encoders[i].new_a = gpio_get(encoders[i].Encoder_A);
-            break;    // Exit, no need to iterate through rest of axes.
-        }
-        // Check B of encoder
-        if ((uint) gpio == (uint) encoders[i].Encoder_B) {
-            encoders[i].new_b = gpio_get(encoders[i].Encoder_B);
-            break;
-        }
-    }
-    // Calculate count of interrupt axis
-    int old_sum = (encoders[i].old_a << 1) + encoders[i].old_b;
-    int new_sum = (encoders[i].new_a << 1) + encoders[i].new_b;
-    int inc = old_sum * 4 + new_sum;
-    if (encoders[i].hold_count == 0) {
-       encoders[i].new_count = enc_LUT[inc];
-       encoders[i].hold_count = PACKET_HOLD_CNT;
-    }
-    // Update old values for next interrupt
-    encoders[i].old_a = encoders[i].new_a;
-    encoders[i].old_b = encoders[i].new_b;
-    // clear status flags
+    gpio_set_irq_enabled_with_callback(gpio, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false, &encoder_callback);
+    uint temp_gpio = gpio; // May not need this. Might be able to use "gpio"
+    xQueueSendToBackFromISR(enc_irq_queue, &temp_gpio, 0);
     events &= ~0xF;
+}
+
+
+_Noreturn static void encoder_task() {
+    uint que_event = 0;
+    while (true) {
+        if (xQueueReceive(enc_irq_queue, &que_event, portMAX_DELAY) == pdPASS) {
+            // Loop through axes and set new input
+            size_t i = 0;
+            for (; i < ENCODER_CNT; i++) {
+                // Check A of encoder
+                if ((uint) que_event == (uint) encoders[i].Encoder_A) {
+                    encoders[i].new_a = gpio_get(encoders[i].Encoder_A);
+                    break;    // Exit, no need to iterate through rest of axes.
+                }
+                // Check B of encoder
+                if ((uint) que_event == (uint) encoders[i].Encoder_B) {
+                    encoders[i].new_b = gpio_get(encoders[i].Encoder_B);
+                    break;
+                }
+            }
+            // Calculate count of interrupt axis
+            int old_sum = (encoders[i].old_a << 1) + encoders[i].old_b;
+            int new_sum = (encoders[i].new_a << 1) + encoders[i].new_b;
+            int inc = old_sum * 4 + new_sum;
+            if (encoders[i].hold_count == 0) {
+                encoders[i].new_count = enc_LUT[inc];
+                encoders[i].hold_count = PACKET_HOLD_CNT;
+            }
+            // Update old values for next interrupt
+            encoders[i].old_a = encoders[i].new_a;
+            encoders[i].old_b = encoders[i].new_b;
+            // clear status flags
+            gpio_set_irq_enabled_with_callback(que_event, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &encoder_callback);
+        }
+    }
 }
 
 
@@ -171,13 +191,12 @@ _Noreturn static void hid_task();
 int main(void) {
     board_init();
     init_gpio();
-    xTaskCreate( usb_device_task, "usbd", USBD_STACK_SIZE, NULL, configMAX_PRIORITIES-3, NULL);  // Create a task for tinyusb device stack
-    xTaskCreate(hid_task, "hid", HID_STACK_SIZE, NULL, configMAX_PRIORITIES - 2, NULL);  // Create HID task
+    xTaskCreate( usb_device_task, "usbd", USBD_STACK_SIZE, NULL, configMAX_PRIORITIES-3, &handle_usb_device_task);  // Create a task for tinyusb device stack
+    xTaskCreate(hid_task, "hid", HID_STACK_SIZE, NULL, configMAX_PRIORITIES - 2, &handle_hid_task);  // Create HID task
+    xTaskCreate(encoder_task, "enc", HID_STACK_SIZE, NULL, configMAX_PRIORITIES - 1, &handle_encoder_task);  // Create encoder task
+    enc_irq_queue = xQueueCreate(ENCODER_CNT, sizeof(uint8_t));
 
-    // skip starting scheduler (and return) for ESP32-S2 or ESP32-S3
-    #if !( TU_CHECK_MCU(ESP32S2) || TU_CHECK_MCU(ESP32S3) )
-        vTaskStartScheduler();
-    #endif
+    vTaskStartScheduler();
     return 0;
 }
 
