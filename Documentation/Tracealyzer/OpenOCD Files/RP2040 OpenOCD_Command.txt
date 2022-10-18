@@ -1,0 +1,1 @@
+./openocd.exe -c "tcl_port disabled" -c "gdb_port 3333" -c "telnet_port 4444" -s C:\Users\PoisonGryphon\xpack-openocd-0.11.0-3\scripts -f board\pico-probe-FreeRTOS.cfg -c "init;reset init;" -c "echo (((READY)))"

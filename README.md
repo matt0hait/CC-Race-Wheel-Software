@@ -4,7 +4,7 @@ By Matthew Hait
 Softare for USB sim racing steering wheel running on FreeRTOS.
 
 ## GPIO BOM
-![Raspberry Pi Pico Pinout](./Documentation/Raspberry_Pi_Pico_Pinout.PNG)
+![Raspberry Pi Pico Pinout](./Documentation/Pico_RP2040/Raspberry_Pi_Pico_Pinout.PNG)
 
 ### User Inputs
 
