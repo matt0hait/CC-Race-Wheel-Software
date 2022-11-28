@@ -50,12 +50,13 @@
 // @brief Static task for hid
 #define HID_STACK_SIZE      configMINIMAL_STACK_SIZE
 
+//define input counts
 #define FIRST_BUTTON_GPIO   0   // @brief First button GPIO number
-#define BUTTON_CNT          14  // @brief Number of buttons
-#define ENCODER_CNT         5   // @brief Number of Encoders
+#define BUTTON_CNT          19  // @brief Number of buttons
+#define ENCODER_CNT         3   // @brief Number of Encoders
 #define ENCODER_MAX         15  // @brief Encoder max count
-#define ENCODER_PIN_CNT     10  // @brief Number of encoder pins
-#define PACKET_HOLD_CNT     10  // @brief Number of packets to hold encoder input
+#define ENCODER_PIN_CNT     6  // @brief Number of encoder pins
+#define PACKET_HOLD_CNT     6  // @brief Number of packets to hold encoder input
 #define MASK(x) (1UL << (x))
 
 uint16_t btnBuff = 0;           // @brief Button state buffer
@@ -83,11 +84,9 @@ struct		encoder {
 struct encoder encoders[ENCODER_CNT];   // @brief array of encoder values
 const int enc_LUT[16] = {0, 1, 2, 0, 2, 0, 0, 1, 1, 0, 0, 2, 0, 2, 1, 0}; // @brief Lookup table for encoder step from interrupts; 1: dec, 2: inc
 const int enc_LU2T[16]= {0, -1, 1, 2, 1, 0, 2, -1, -1, 2, 0, 1, 2, 1, -1, 0}; // @brief Lookup table for encoder step from interrupts
-const uint8_t encoder_pins[10] = {14, 15,
-                                  16, 17,
-                                  18, 19,
+const uint8_t encoder_pins[10] = {18, 19,
                                   20, 21,
-                                  22, 28};
+                                  22, 28}; //edit for number of encoders
 
 void encoder_callback(uint gpio, uint32_t events) {
     gpio_set_irq_enabled_with_callback(gpio, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false, &encoder_callback);
