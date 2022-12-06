@@ -1,5 +1,5 @@
-# Race Wheel Software
-By Matthew Hait
+# WRC Fiesta Race Wheel Software
+By Matthew Hait & Gabe Carnes
 
 Softare for USB sim racing steering wheel running on FreeRTOS.
 
@@ -11,20 +11,16 @@ Softare for USB sim racing steering wheel running on FreeRTOS.
 - 12 - Buttons
   - OP: One output each
   - GPIO: GP2-13
-- 5 - Encoders
+- 3 - Encoder Buttons
+  - OP: One output each
+  - GPIO: GP14-16
+- 2 - Momentary Toggle Switches
+  - OP: Two outputs each
+  - GPIO: GP0-1, GP26-27 
+- 3 - Encoders
   - PN: Encoder_CTS-288T232R161A2
   - OP: Two-bit encoder, Two outputs, Interrupts needed
-  - GPIO: GP14-21,GP22,GP28
-- 2 - Paddles (Buttons)
-  - OP: One output each
-  - GPIO: GP0-1 **Move to save UART for future projects**
-- 2 - Hall Effect for clutch
-  - OP: Analog
-  - GPIO: 26, 27
-- 1 - Multi-direction Switch
-  - PN: RKJXT1F
-  - OP: 4 POS + rotate + press
-  - GPIO: **TBD**
+  - GPIO: GP18-22,GP28
 ### Other
   
 - Internal Temp Sensor

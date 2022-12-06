@@ -1,0 +1,9 @@
+"C:\Program Files\JetBrains\CLion 2022.3\bin\cmake\win\bin\cmake.exe" -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_MAKE_PROGRAM=C:/Program Files/JetBrains/CLion 2022.3/bin/ninja/win/ninja.exe" -G Ninja -S C:\Users\Gabe\Documents\GitHub\CC-Race-Wheel-Software -B C:\Users\Gabe\Documents\GitHub\CC-Race-Wheel-Software\cmake-build-debug
+CMake Error at pico_sdk_import.cmake:44 (message):
+  SDK location was not specified.  Please set PICO_SDK_PATH or set
+  PICO_SDK_FETCH_FROM_GIT to on to fetch from git.
+Call Stack (most recent call first):
+  CMakeLists.txt:6 (include)
+
+
+-- Configuring incomplete, errors occurred!
