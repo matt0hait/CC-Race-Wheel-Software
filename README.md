@@ -1,7 +1,7 @@
 # Race Wheel Software
 By Matthew Hait
 
-Softare for USB sim racing steering wheel running on FreeRTOS.
+Software for USB sim racing steering wheel running on FreeRTOS.
 
 ## GPIO BOM
 ![Raspberry Pi Pico Pinout](./Documentation/Raspberry_Pi_Pico_Pinout.PNG)
@@ -44,6 +44,11 @@ Softare for USB sim racing steering wheel running on FreeRTOS.
 ### Tasking
 - FreeRTOS
   - https://github.com/smittytone/RP2040-FreeRTOS
+### Pinout for 4 Pin Aviation Connector
+1: PWR - Red
+2: Rx - White
+3: Gnd - Black
+4: TX - Green
 
 ----------------------
 ### Commands I forget
