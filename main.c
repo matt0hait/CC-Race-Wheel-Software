@@ -52,9 +52,9 @@
 
 #define FIRST_BUTTON_GPIO   0   // @brief First button GPIO number
 #define BUTTON_CNT          14  // @brief Number of buttons
-#define ENCODER_CNT         5   // @brief Number of Encoders
-#define ENCODER_MAX         15  // @brief Encoder max count
-#define ENCODER_PIN_CNT     10
+#define ENCODER_CNT         2   // @brief Number of Encoders
+#define ENCODER_MAX         12  // @brief Encoder max count
+#define ENCODER_PIN_CNT     12
 #define MASK(x) (1UL << (x))
 
 uint16_t btnBuff = 0;           // @brief Button state buffer
