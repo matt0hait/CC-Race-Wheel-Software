@@ -51,7 +51,8 @@
 #define HID_STACK_SIZE      configMINIMAL_STACK_SIZE
 
 #define FIRST_BUTTON_GPIO   0   // @brief First button GPIO number
-#define BUTTON_CNT          24  // @brief Number of buttons
+#define BUTTON_CNT          17  // @brief Number of buttons that short to ground
+#define BUTTON_CNT_POS      7   // @brief Number of buttons that short to +5v
 #define ENCODER_CNT         0   // @brief Number of Encoders
 #define ENCODER_MAX         0  // @brief Encoder max count
 #define ENCODER_PIN_CNT     0
@@ -135,6 +136,13 @@ void init_gpio(void) {
         gpio_init(gpio);
         gpio_set_dir(gpio, GPIO_IN);
         gpio_pull_up(gpio); // All buttons pull to ground when pressed
+        gpio_set_input_hysteresis_enabled(gpio,true); // Enable Schmitt triggers to debounce. Set slew rate if further issues.
+    }
+    // Setup Buttons that short to +5V
+    for (int gpio = 16; gpio < 16 + BUTTON_CNT_POS; gpio++){
+        gpio_init(gpio);
+        gpio_set_dir(gpio, GPIO_IN);
+        gpio_pull_down(gpio); // Buttons pull to +5V when pressed
         gpio_set_input_hysteresis_enabled(gpio,true); // Enable Schmitt triggers to debounce. Set slew rate if further issues.
     }
     // Setup Encoders

@@ -178,7 +178,7 @@ char const* string_desc_arr [] =
   (const char[]) { 0x09, 0x04 }, // 0: is supported language is English (0x0409)
   "CC Racing",                     // 1: Manufacturer
   "CC Racing Button Box",              // 2: Product
-  "2322",                      // 3: Serials, should use chip ID
+  "2323",                      // 3: Serials, should use chip ID
 };
 
 static uint16_t _desc_str[32];
