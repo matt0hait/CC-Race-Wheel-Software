@@ -51,10 +51,10 @@
 #define HID_STACK_SIZE      configMINIMAL_STACK_SIZE
 
 #define FIRST_BUTTON_GPIO   0   // @brief First button GPIO number
-#define BUTTON_CNT          14  // @brief Number of buttons
-#define ENCODER_CNT         2   // @brief Number of Encoders
-#define ENCODER_MAX         12  // @brief Encoder max count
-#define ENCODER_PIN_CNT     12
+#define BUTTON_CNT          24  // @brief Number of buttons
+#define ENCODER_CNT         0   // @brief Number of Encoders
+#define ENCODER_MAX         0  // @brief Encoder max count
+#define ENCODER_PIN_CNT     0
 #define MASK(x) (1UL << (x))
 
 uint16_t btnBuff = 0;           // @brief Button state buffer
