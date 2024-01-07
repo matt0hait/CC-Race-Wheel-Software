@@ -51,10 +51,10 @@
 #define HID_STACK_SIZE      configMINIMAL_STACK_SIZE
 
 #define FIRST_BUTTON_GPIO   0   // @brief First button GPIO number
-#define BUTTON_CNT          17  // @brief Number of buttons that short to ground
-#define BUTTON_CNT_POS      7   // @brief Number of buttons that short to +5v
+#define BUTTON_CNT          13  // @brief Number of buttons that short to ground
+#define BUTTON_CNT_POS      9   // @brief Number of buttons that short to +5v
 #define ENCODER_CNT         0   // @brief Number of Encoders
-#define ENCODER_MAX         0  // @brief Encoder max count
+#define ENCODER_MAX         0   // @brief Encoder max count
 #define ENCODER_PIN_CNT     0
 #define MASK(x) (1UL << (x))
 
@@ -139,7 +139,7 @@ void init_gpio(void) {
         gpio_set_input_hysteresis_enabled(gpio,true); // Enable Schmitt triggers to debounce. Set slew rate if further issues.
     }
     // Setup Buttons that short to +5V
-    for (int gpio = 16; gpio < 16 + BUTTON_CNT_POS; gpio++){
+    for (int gpio = 14; gpio < 14 + BUTTON_CNT_POS; gpio++) {
         gpio_init(gpio);
         gpio_set_dir(gpio, GPIO_IN);
         gpio_pull_down(gpio); // Buttons pull to +5V when pressed
@@ -268,6 +268,9 @@ static void send_hid_report(uint8_t report_id, uint32_t btn) {
             // Grab button data
             for (int gpio = FIRST_BUTTON_GPIO, offset = 0; gpio < FIRST_BUTTON_GPIO + BUTTON_CNT; gpio++, offset++) {
                 if (gpio_get(gpio) == 0) report.buttons |= TU_BIT(offset);
+            }
+            for (int gpio = 14, offset = 14; gpio < 14 + BUTTON_CNT_POS; gpio++, offset++) {
+                if (gpio_get(gpio) == 1) report.buttons |= TU_BIT(offset);
             }
             // Reboot if GPIO 3, 5, 7, 9, & 11 are pressed simultaneously.
             if ((report.buttons & 0x554) == 0x554) {
