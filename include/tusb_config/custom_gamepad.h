@@ -45,13 +45,13 @@
     HID_REPORT_COUNT ( 1                                      ) ,\
     HID_REPORT_SIZE  ( 8                                      ) ,\
     HID_INPUT        ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE ) ,\
-    /* 2 paddles + 12 bit Button Map, Count must be multiple of 8 */ \
+    /* 2 paddles + 12 bit Button Map + 14, Count must be multiple of 8 */ \
     HID_USAGE_PAGE   ( HID_USAGE_PAGE_BUTTON                  ) ,\
     HID_USAGE_MIN    ( 1                                      ) ,\
-    HID_USAGE_MAX    ( 14                                     ) ,\
+    HID_USAGE_MAX    ( 23                                     ) ,\
     HID_LOGICAL_MIN  ( 0                                      ) ,\
     HID_LOGICAL_MAX  ( 1                                      ) ,\
-    HID_REPORT_COUNT ( 16                                     ) ,\
+    HID_REPORT_COUNT ( 32                                     ) ,\
     HID_REPORT_SIZE  ( 1                                      ) ,\
     HID_INPUT        ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE ) ,\
     /* Dial 0 */ \
@@ -106,7 +106,7 @@ typedef struct TU_ATTR_PACKED
 {
     uint8_t clutch;
     uint8_t hat;        ///< Buttons mask for currently pressed buttons in the DPad/hat
-    uint16_t buttons;  ///< Buttons mask for currently pressed buttons
+    uint32_t buttons;  ///< Buttons mask for currently pressed buttons
     uint16_t dial_0;
     uint16_t dial_1;
     uint16_t dial_2;
