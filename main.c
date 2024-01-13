@@ -139,7 +139,7 @@ void init_gpio(void) {
         gpio_set_input_hysteresis_enabled(gpio,true); // Enable Schmitt triggers to debounce. Set slew rate if further issues.
     }
     // Setup Buttons that short to +5V
-    for (int gpio = 14; gpio < 14 + BUTTON_CNT_POS; gpio++) {
+    for (int gpio = BUTTON_CNT; gpio < BUTTON_CNT + BUTTON_CNT_POS; gpio++) {
         gpio_init(gpio);
         gpio_set_dir(gpio, GPIO_IN);
         gpio_pull_down(gpio); // Buttons pull to +5V when pressed
@@ -257,19 +257,17 @@ static void send_hid_report(uint8_t report_id, uint32_t btn) {
                 .buttons = 0,
                 .dial_1 = 0,
                 .dial_2 = 0,
-                .dial_3 = 0,
-                .dial_4 = 0
+                .dial_3 = 0
             };
             report.dial_0 = TU_BIT(encoders[0].new_count);
             report.dial_1 = TU_BIT(encoders[1].new_count);
             report.dial_2 = TU_BIT(encoders[2].new_count);
             report.dial_3 = TU_BIT(encoders[3].new_count);
-            report.dial_4 = TU_BIT(encoders[4].new_count);
             // Grab button data
             for (int gpio = FIRST_BUTTON_GPIO, offset = 0; gpio < FIRST_BUTTON_GPIO + BUTTON_CNT; gpio++, offset++) {
                 if (gpio_get(gpio) == 0) report.buttons |= TU_BIT(offset);
             }
-            for (int gpio = 14, offset = 14; gpio < 14 + BUTTON_CNT_POS; gpio++, offset++) {
+            for (int gpio = BUTTON_CNT, offset = BUTTON_CNT; gpio < BUTTON_CNT + BUTTON_CNT_POS; gpio++, offset++) {
                 if (gpio_get(gpio) == 1) report.buttons |= TU_BIT(offset);
             }
             // Reboot if GPIO 3, 5, 7, 9, & 11 are pressed simultaneously.
